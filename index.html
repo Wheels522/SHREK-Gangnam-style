@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>DUCKSHOT VR - Experience Duck Shooting in WEBXR</title>
+    <script src="https://aframe.io/releases/1.1.0/aframe.min.js"></script>
+    <script src="https://unpkg.com/aframe-environment-component@1.1.0/dist/aframe-environment-component.min.js"></script>
+    <script src="https://rawgit.com/fernandojsg/aframe-teleport-controls/master/dist/aframe-teleport-controls.min.js"></script>
+
+    <script src="https://unpkg.com/super-hands/dist/super-hands.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/n5ro/aframe-physics-system@v4.0.1/dist/aframe-physics-system.js"></script>
+    <script src="https://unpkg.com/aframe-event-set-component@^4.1.1/dist/aframe-event-set-component.min.js"></script>
+    <script src="https://unpkg.com/aframe-physics-extras/dist/aframe-physics-extras.min.js"></script>
+  </head>
+
+  <body>
+    <script>
+      AFRAME.registerComponent("phase-shift", {
+        init: function() {
+          var el = this.el;
+          el.addEventListener("gripdown", function() {
+            el.setAttribute("collision-filter", { collisionForces: true });
+          });
+          el.addEventListener("gripup", function() {
+            el.setAttribute("collision-filter", { collisionForces: false });
+          });
+        }
+      });
+    </script>
+
+    <!--       Script to teleport     -->
+    <script>
+      AFRAME.registerComponent("input-listen", {
+        init: function() {
+          this.el.grip = false;
+
+          this.el.addEventListener("gripdown", function(e) {
+            this.grip = true;
+          });
+          this.el.addEventListener("gripup", function(e) {
+            this.grip = false;
+          });
+
+          this.el.addEventListener("raycaster-intersection", function(e) {
+            this.selectedObj = e.detail.els[0];
+          });
+          this.el.addEventListener("raycaster-intersection-cleared", function(
+            e
+          ) {
+            this.selectedObj = null;
+          });
+
+          this.el.addEventListener("abuttondown", function(e) {
+            this.emit("teleportstart");
+          });
+          this.el.addEventListener("abuttonup", function(e) {
+            this.emit("teleportend");
+          });
+
+          this.el.addEventListener("xbuttondown", function(e) {
+            this.emit("teleportstart");
+          });
+
+          this.el.addEventListener("xbuttonup", function(e) {
+            this.emit("teleportend");
+          });
+        },
+
+        tick: function() {
+          if (!this.el.selectedObj) {
+            return;
+          }
+          if (!this.el.grip) {
+            return;
+          }
+
+          var ray = this.el.getAttribute("raycaster").direction;
+          var p = new THREE.Vector3(ray.x, ray.y, ray.z);
+          p.normalize();
+          p.multiplyScalar(1.2);
+          this.el.object3D.localToWorld(p);
+          this.el.selectedObj.object3D.position.set(p.x, p.y, p.z);
+        }
+      });
+    </script>
+
+    <a-scene physics="debug: false; gravity: 0; restitution: 0.9; ">
+      <a-assets>
+        <a-mixin
+          id="all-interactions"
+          hoverable
+          grabbable
+          stretchable
+          draggable
+          event-set__hoveron="_event: hover-start; material.opacity: 0.7; transparent: true"
+          event-set__hoveroff="_event: hover-end; material.opacity: 1; transparent: false"
+          dynamic-body
+        ></a-mixin>
+
+        <a-mixin
+          id="grab-move"
+          hoverable
+          grabbable
+          draggable
+          event-set__hoveron="_event: hover-start; material.opacity: 0.7; transparent: true"
+          event-set__hoveroff="_event: hover-end; material.opacity: 1; transparent: false"
+          dynamic-body="shape: box; sphereRadius: 0.1"
+        ></a-mixin>
+
+        <a-mixin
+          id="physics-hands"
+          physics-collider
+          phase-shift
+          collision-filter="collisionForces: false"
+          static-body="shape: sphere; sphereRadius: 0.02"
+          super-hands="colliderEvent: collisions;
+                              colliderEventProperty: els;
+                              colliderEndEvent: collisions;
+                              colliderEndEventProperty: clearedEls;"
+        ></a-mixin>
+
+        <img
+          crossorigin="anonymous"
+          id="ground"
+          src="https://cdn.glitch.com/97890fbd-889b-466f-a357-23627a83de50%2FTexturesCom_FloorStreets0064_2_M.jpg?v=1612300231287"
+        />
+
+        <!-- 3D model -->
+        <a-asset-item
+          id="example-model"
+          src="example.glb"
+        ></a-asset-item>
+      </a-assets>
+
+      <!-- Ground -->
+      <a-plane
+        static-body
+        material="color: #FFFFFFF; src: #ground; repeat :15 15;"
+        rotation="-90 0 0"
+        position="0 0.1 0"
+        scale="20 20 0"
+      >
+      </a-plane>
+
+      <!-- Environment -->
+      <a-entity
+        environment="preset:  forest;  playArea:  2;  active:  true;  seed:  8; 
+                     skyType:  gradient;  
+                     skyColor:  #ffffff;  
+                     horizonColor:  #87CEEB;  
+                     fog:  0.5;  
+                     groundYScale:  4.18;  groundTexture:  squares;  groundColor:  #43994b;  
+                     groundColor2:  #43994b;  dressing:  trees;  dressingAmount:  500;  
+                     dressingColor:  #43994b;  dressingScale:  1;   
+                     gridColor:  #43994b"
+      ></a-entity>
+
+      <!-- Example 3D model (make it grabbable) -->
+      <a-gltf-model
+        mixin="all-interactions grab-move"
+        class="collidable"
+        src="#example-model"
+        scale="1 1 1"
+        position="1 1.5 -3"
+      >
+      </a-gltf-model>
+
+      <!-- Camera and controls -->
+      <a-entity id="cameraRig">
+        <a-entity
+          id="head"
+          camera
+          wasd-controls
+          look-controls
+          position="0 1.6 0"
+        >
+        </a-entity>
+        <a-entity
+          id="ctlL"
+          teleport-controls="cameraRig: #cameraRig; teleportOrigin: #head; startEvents: teleportstart; endEvents: teleportend"
+          raycaster="objects: .collidable; far:1.2; "
+          hand-controls="hand: left"
+          mixin="physics-hands"
+          input-listen
+          phase-shift
+        >
+          <a-text
+            value="Press and hold for teleport \nX: to Move"
+            position="0 0.08 0"
+            rotation="-90 0 0"
+            scale="0.1 0.1 0.1"
+            align="center"
+            color="#FFFFFF"
+          ></a-text>
+          <a-sphere
+            radius="0.01"
+            position="0 0 -1.2"
+            color="#FFFFFF"
+          ></a-sphere>
+        </a-entity>
+        <a-entity
+          id="ctlR"
+          raycaster="objects: .collidable; far:1.2; "
+          hand-controls="hand: right"
+          mixin="physics-hands"
+          input-listen
+          phase-shift
+        >
+          <a-text
+            value="Use Grip to interact"
+            position="0 0.08 0"
+            rotation="-90 0 0"
+            scale="0.1 0.1 0.1"
+            align="center"
+            color="#FFFFFF"
+          ></a-text>
+          <a-sphere
+            radius="0.01"
+            position="0 0 -1.2"
+            color="#FFFFFF"
+          ></a-sphere>
+        </a-entity>
+      </a-entity>
+    </a-scene>
+  </body>
+</html>
